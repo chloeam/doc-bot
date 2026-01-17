@@ -6,7 +6,7 @@
 // Configuration
 const CLAUDE_API_KEY = PropertiesService.getScriptProperties().getProperty('CLAUDE_API_KEY');
 const CLAUDE_API_URL = 'https://api.anthropic.com/v1/messages';
-const CLAUDE_MODEL = 'claude-3-5-sonnet-20241022';
+const CLAUDE_MODEL = 'claude-3-5-sonnet-20240620';
 const BOT_MENTION = '@claude'; // The mention trigger in comments
 
 // Cached context storage
