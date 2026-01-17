@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AI Writing Coach</title>
+
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- React and ReactDOM -->
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+
+  <!-- Babel Standalone for JSX -->
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+
+    #root {
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    .chat-message {
+      animation: fadeIn 0.3s ease-in;
+    }
+
+    @keyframes fadeIn {
+      from {
+        opacity: 0;
+        transform: translateY(10px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .scrollbar-thin::-webkit-scrollbar {
+      width: 6px;
+    }
+
+    .scrollbar-thin::-webkit-scrollbar-track {
+      background: #f1f1f1;
+    }
+
+    .scrollbar-thin::-webkit-scrollbar-thumb {
+      background: #888;
+      border-radius: 3px;
+    }
+
+    .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+      background: #555;
+    }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect, useRef } = React;
+
+    function App() {
+      const [messages, setMessages] = useState([]);
+      const [inputValue, setInputValue] = useState('');
+      const [isLoading, setIsLoading] = useState(false);
+      const [hasSelection, setHasSelection] = useState(false);
+      const [selectedText, setSelectedText] = useState('');
+      const [apiKeySet, setApiKeySet] = useState(false);
+      const [showApiKeyInput, setShowApiKeyInput] = useState(false);
+      const [apiKeyInput, setApiKeyInput] = useState('');
+      const [isProcessingMentions, setIsProcessingMentions] = useState(false);
+      const messagesEndRef = useRef(null);
+
+      useEffect(() => {
+        checkApiKey();
+        checkSelection();
+      }, []);
+
+      useEffect(() => {
+        scrollToBottom();
+      }, [messages]);
+
+      const scrollToBottom = () => {
+        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+      };
+
+      const checkApiKey = () => {
+        google.script.run
+          .withSuccessHandler((result) => {
+            setApiKeySet(result.isSet);
+            if (!result.isSet) {
+              setShowApiKeyInput(true);
+            }
+          })
+          .getApiKeyStatus();
+      };
+
+      const checkSelection = () => {
+        google.script.run
+          .withSuccessHandler((text) => {
+            setHasSelection(!!text);
+            setSelectedText(text || '');
+          })
+          .getSelectedText();
+      };
+
+      const handleSendMessage = () => {
+        if (!inputValue.trim() || isLoading) return;
+
+        const userMessage = inputValue.trim();
+        setInputValue('');
+
+        // Add user message to chat
+        const newUserMessage = {
+          role: 'user',
+          content: userMessage,
+          timestamp: new Date().toISOString()
+        };
+
+        setMessages(prev => [...prev, newUserMessage]);
+        setIsLoading(true);
+
+        // Call backend
+        google.script.run
+          .withSuccessHandler((result) => {
+            setIsLoading(false);
+
+            if (result.success) {
+              const assistantMessage = {
+                role: 'assistant',
+                content: result.response,
+                timestamp: new Date().toISOString(),
+                selectedText: result.selectedText
+              };
+              setMessages(prev => [...prev, assistantMessage]);
+            } else {
+              const errorMessage = {
+                role: 'error',
+                content: `Error: ${result.error}`,
+                timestamp: new Date().toISOString()
+              };
+              setMessages(prev => [...prev, errorMessage]);
+            }
+          })
+          .withFailureHandler((error) => {
+            setIsLoading(false);
+            const errorMessage = {
+              role: 'error',
+              content: `Error: ${error.message}`,
+              timestamp: new Date().toISOString()
+            };
+            setMessages(prev => [...prev, errorMessage]);
+          })
+          .handleChatMessage(userMessage, hasSelection);
+      };
+
+      const handleKeyPress = (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+          e.preventDefault();
+          handleSendMessage();
+        }
+      };
+
+      const handleRefreshSelection = () => {
+        checkSelection();
+      };
+
+      const handleProcessMentions = () => {
+        setIsProcessingMentions(true);
+
+        google.script.run
+          .withSuccessHandler((result) => {
+            setIsProcessingMentions(false);
+
+            if (result.success) {
+              const statusMessage = {
+                role: 'system',
+                content: `Processed ${result.processed} @ mention(s)`,
+                timestamp: new Date().toISOString()
+              };
+              setMessages(prev => [...prev, statusMessage]);
+            } else {
+              const errorMessage = {
+                role: 'error',
+                content: `Error processing mentions: ${result.error}`,
+                timestamp: new Date().toISOString()
+              };
+              setMessages(prev => [...prev, errorMessage]);
+            }
+          })
+          .withFailureHandler((error) => {
+            setIsProcessingMentions(false);
+            const errorMessage = {
+              role: 'error',
+              content: `Error: ${error.message}`,
+              timestamp: new Date().toISOString()
+            };
+            setMessages(prev => [...prev, errorMessage]);
+          })
+          .processAtMentions();
+      };
+
+      const handleSaveApiKey = () => {
+        if (!apiKeyInput.trim()) return;
+
+        google.script.run
+          .withSuccessHandler((result) => {
+            if (result.success) {
+              setApiKeySet(true);
+              setShowApiKeyInput(false);
+              setApiKeyInput('');
+              const statusMessage = {
+                role: 'system',
+                content: 'API key saved successfully!',
+                timestamp: new Date().toISOString()
+              };
+              setMessages(prev => [...prev, statusMessage]);
+            }
+          })
+          .setClaudeApiKey(apiKeyInput);
+      };
+
+      if (showApiKeyInput && !apiKeySet) {
+        return (
+          <div className="flex flex-col h-screen p-4 bg-gray-50">
+            <div className="mb-4">
+              <h2 className="text-xl font-bold text-gray-800 mb-2">Setup Required</h2>
+              <p className="text-sm text-gray-600 mb-4">
+                Please enter your Claude API key to use the AI Writing Coach.
+              </p>
+              <p className="text-xs text-gray-500 mb-4">
+                Get your API key from: <a href="https://console.anthropic.com/" target="_blank" className="text-blue-500 underline">console.anthropic.com</a>
+              </p>
+            </div>
+
+            <div className="mb-4">
+              <input
+                type="password"
+                value={apiKeyInput}
+                onChange={(e) => setApiKeyInput(e.target.value)}
+                placeholder="sk-ant-..."
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+              />
+            </div>
+
+            <button
+              onClick={handleSaveApiKey}
+              className="w-full bg-blue-500 text-white py-2 px-4 rounded-lg hover:bg-blue-600 transition-colors text-sm font-medium"
+            >
+              Save API Key
+            </button>
+          </div>
+        );
+      }
+
+      return (
+        <div className="flex flex-col h-screen bg-white">
+          {/* Header */}
+          <div className="bg-gradient-to-r from-blue-500 to-blue-600 text-white p-4 shadow-md">
+            <h1 className="text-lg font-bold">AI Writing Coach</h1>
+            <p className="text-xs opacity-90">Powered by Claude</p>
+          </div>
+
+          {/* Selection indicator */}
+          {hasSelection && (
+            <div className="bg-yellow-50 border-b border-yellow-200 px-4 py-2">
+              <div className="flex items-center justify-between">
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-medium text-yellow-800">Text selected:</p>
+                  <p className="text-xs text-yellow-700 truncate">
+                    {selectedText.substring(0, 60)}{selectedText.length > 60 ? '...' : ''}
+                  </p>
+                </div>
+                <button
+                  onClick={handleRefreshSelection}
+                  className="ml-2 text-xs text-yellow-600 hover:text-yellow-800 underline"
+                >
+                  Refresh
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Buttons */}
+          <div className="border-b border-gray-200 px-4 py-2 flex gap-2">
+            <button
+              onClick={handleProcessMentions}
+              disabled={isProcessingMentions}
+              className="flex-1 bg-green-500 text-white py-2 px-3 rounded-lg hover:bg-green-600 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors text-sm font-medium"
+            >
+              {isProcessingMentions ? 'Processing...' : 'Process @ Mentions'}
+            </button>
+            <button
+              onClick={handleRefreshSelection}
+              className="bg-gray-200 text-gray-700 py-2 px-3 rounded-lg hover:bg-gray-300 transition-colors text-sm"
+            >
+              ↻
+            </button>
+          </div>
+
+          {/* Messages */}
+          <div className="flex-1 overflow-y-auto p-4 space-y-4 scrollbar-thin">
+            {messages.length === 0 && (
+              <div className="text-center text-gray-400 mt-8">
+                <p className="text-sm mb-2">👋 Welcome to AI Writing Coach</p>
+                <p className="text-xs">Ask me anything about your document, or select text and ask for feedback.</p>
+              </div>
+            )}
+
+            {messages.map((message, index) => (
+              <div key={index} className="chat-message">
+                {message.role === 'user' && (
+                  <div className="flex justify-end">
+                    <div className="bg-blue-500 text-white rounded-lg py-2 px-3 max-w-[85%]">
+                      <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+                    </div>
+                  </div>
+                )}
+
+                {message.role === 'assistant' && (
+                  <div className="flex justify-start">
+                    <div className="bg-gray-100 text-gray-800 rounded-lg py-2 px-3 max-w-[85%]">
+                      {message.selectedText && (
+                        <div className="bg-yellow-100 border-l-2 border-yellow-400 p-2 mb-2 text-xs">
+                          <p className="font-medium text-yellow-800">Context:</p>
+                          <p className="text-yellow-700 italic">"{message.selectedText.substring(0, 100)}{message.selectedText.length > 100 ? '...' : ''}"</p>
+                        </div>
+                      )}
+                      <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+                    </div>
+                  </div>
+                )}
+
+                {message.role === 'system' && (
+                  <div className="flex justify-center">
+                    <div className="bg-green-100 text-green-800 rounded-lg py-1 px-3 text-xs">
+                      {message.content}
+                    </div>
+                  </div>
+                )}
+
+                {message.role === 'error' && (
+                  <div className="flex justify-center">
+                    <div className="bg-red-100 text-red-800 rounded-lg py-2 px-3 max-w-[85%]">
+                      <p className="text-xs">{message.content}</p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ))}
+
+            {isLoading && (
+              <div className="flex justify-start chat-message">
+                <div className="bg-gray-100 text-gray-800 rounded-lg py-2 px-3">
+                  <div className="flex space-x-2">
+                    <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
+                    <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{animationDelay: '0.1s'}}></div>
+                    <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{animationDelay: '0.2s'}}></div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <div ref={messagesEndRef} />
+          </div>
+
+          {/* Input */}
+          <div className="border-t border-gray-200 p-4">
+            <div className="flex gap-2">
+              <textarea
+                value={inputValue}
+                onChange={(e) => setInputValue(e.target.value)}
+                onKeyPress={handleKeyPress}
+                placeholder="Ask me anything about your writing..."
+                className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none text-sm"
+                rows="2"
+                disabled={isLoading}
+              />
+              <button
+                onClick={handleSendMessage}
+                disabled={isLoading || !inputValue.trim()}
+                className="bg-blue-500 text-white px-4 rounded-lg hover:bg-blue-600 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                </svg>
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // Render the app
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App />);
+  </script>
+</body>
+</html>

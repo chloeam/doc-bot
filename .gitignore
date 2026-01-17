@@ -1,0 +1,30 @@
+# Google Apps Script
+.clasp.json
+.claspignore
+
+# API Keys and Secrets
+.env
+*.key
+credentials.json
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+
+# Dependencies
+node_modules/
+
+# Build files
+dist/
+build/
