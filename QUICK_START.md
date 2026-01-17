@@ -47,22 +47,42 @@ Get your AI Writing Coach up and running in 10 minutes!
 3. Select **Drive API** and click **Add**
 4. Make sure version is set to **v2**
 
-### Step 4: Save and Authorize
+### Step 4: Save the Project
 
 1. Click the **💾 Save** button (or Ctrl+S / Cmd+S)
 2. Name your project: **AI Writing Coach**
-3. Click **Run** → **onOpen** (at the top)
-4. You'll be asked to authorize the script:
+
+### Step 5: Authorize (Choose ONE method)
+
+**Method A: From Google Docs (Easiest - Recommended)**
+
+1. Go back to your Google Doc
+2. Refresh the page (F5 or Cmd+R)
+3. You should see **AI Writing Coach** in the menu bar
+4. Click **AI Writing Coach** → **Open Sidebar**
+5. Authorization prompt will appear:
    - Click **Review permissions**
    - Choose your Google account
    - Click **Advanced** → **Go to AI Writing Coach (unsafe)**
    - Click **Allow**
+6. Done! The sidebar should open.
 
-### Step 5: Test It
+**Method B: From Apps Script Editor**
 
-1. Go back to your Google Doc
-2. Refresh the page (F5 or Cmd+R)
-3. You should now see **AI Writing Coach** in the menu bar!
+1. At the top of the Apps Script editor, find the toolbar
+2. Look for a dropdown that says "Select function" (next to a ▶ Run button)
+3. Click the dropdown and select **onOpen**
+4. Click the **▶ Run** button
+5. Authorization prompt will appear (follow steps from Method A)
+6. Go back to your Doc, refresh, and you'll see the menu item
+
+**Method C: Deploy as Test**
+
+1. Click **Deploy** (top right corner)
+2. Select **Test deployments**
+3. Click **Install**
+4. Follow authorization prompts
+5. Go back to your Doc and refresh
 
 ## Part 3: Configure Your API Key (2 minutes)
 
@@ -107,9 +127,11 @@ Get your AI Writing Coach up and running in 10 minutes!
 ### "AI Writing Coach" doesn't appear in the menu
 
 **Fix**:
-- Make sure you ran the `onOpen` function in Apps Script
-- Refresh your Google Doc (F5)
-- Wait a few seconds after refreshing
+- Make sure you saved the Apps Script project
+- Refresh your Google Doc (F5) and wait 5-10 seconds
+- Hard refresh: Ctrl+Shift+R (Windows/Linux) or Cmd+Shift+R (Mac)
+- If still not showing, try Method B or C from Step 5 to authorize first
+- Check that all three files (Code.gs, Sidebar.html, appsscript.json) are in the project
 
 ### "CLAUDE_API_KEY not set" error
 
