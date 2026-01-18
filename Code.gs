@@ -235,14 +235,19 @@ function getAllComments() {
   const docId = doc.getId();
 
   try {
-    // Use Drive API to get comments
-    const comments = Drive.Comments.list(docId, {
-      fields: 'items(commentId,content,anchor,replies,status)'
+    // Use Drive API v3 to get comments
+    const response = Drive.Comments.list(docId, {
+      fields: 'comments(id,content,anchor,replies,resolved)'
     });
 
-    return comments.items || [];
+    Logger.log('Retrieved ' + (response.comments ? response.comments.length : 0) + ' comments');
+    return response.comments || [];
   } catch (error) {
     Logger.log('Error getting comments: ' + error.toString());
+    // Check if it's a Drive API not enabled error
+    if (error.toString().indexOf('Drive') !== -1 || error.toString().indexOf('not found') !== -1) {
+      throw new Error('Drive API not enabled. Please enable Drive API in Advanced Services.');
+    }
     return [];
   }
 }
@@ -287,13 +292,21 @@ function processAtMentions() {
     const docContent = getDocumentContent();
     const results = [];
 
+    Logger.log('=== Processing @ Mentions ===');
+    Logger.log('Total comments found: ' + comments.length);
+
     for (let i = 0; i < comments.length; i++) {
       const comment = comments[i];
+      Logger.log('\n--- Comment ' + (i+1) + ' (ID: ' + comment.id + ') ---');
+      Logger.log('Content preview: ' + (comment.content ? comment.content.substring(0, 100) : 'null'));
 
       // Check if comment mentions the bot
       if (!comment.content || comment.content.toLowerCase().indexOf(BOT_MENTION.toLowerCase()) === -1) {
+        Logger.log('Skipping: No @claude mention');
         continue;
       }
+
+      Logger.log('✓ Contains @claude mention');
 
       // Check if already replied
       const hasReply = comment.replies && comment.replies.some(r =>
@@ -301,37 +314,52 @@ function processAtMentions() {
       );
 
       if (hasReply) {
+        Logger.log('Skipping: Already has AI Writing Coach reply');
         continue; // Skip already processed comments
       }
 
+      Logger.log('✓ No previous reply found');
+
       const anchoredText = getAnchoredText(comment.anchor);
+      Logger.log('Anchored text: ' + (anchoredText ? anchoredText.substring(0, 50) + '...' : 'null'));
 
       // Call Claude with structured prompt
+      Logger.log('Calling Claude API...');
       const claudeResponse = callClaudeForComment(
         comment.content,
         anchoredText,
         docContent
       );
 
+      Logger.log('Claude response received (length: ' + claudeResponse.response.length + ')');
+      Logger.log('Claude response preview: ' + claudeResponse.response.substring(0, 200));
+
       // Parse response and take action
       const action = parseClaudeAction(claudeResponse.response);
+      Logger.log('Parsed action type: ' + action.type);
 
       if (action.type === 'SUGGEST_EDIT') {
-        // Insert suggestion at comment location
+        Logger.log('Executing: SUGGEST_EDIT');
+        Logger.log('New text preview: ' + action.newText.substring(0, 100));
         insertSuggestion(comment, action.newText);
         results.push({
-          commentId: comment.commentId,
+          commentId: comment.id,
           action: 'SUGGEST_EDIT',
           success: true
         });
+        Logger.log('✓ Suggestion inserted successfully');
       } else if (action.type === 'REPLY_TO_COMMENT') {
-        // Reply to comment
-        replyToComment(comment.commentId, action.response);
+        Logger.log('Executing: REPLY_TO_COMMENT');
+        Logger.log('Reply text preview: ' + action.response.substring(0, 100));
+        const replySuccess = replyToComment(comment.id, action.response);
         results.push({
-          commentId: comment.commentId,
+          commentId: comment.id,
           action: 'REPLY_TO_COMMENT',
-          success: true
+          success: replySuccess
         });
+        Logger.log(replySuccess ? '✓ Reply posted successfully' : '✗ Reply failed');
+      } else {
+        Logger.log('Action: IGNORE (no action taken)');
       }
       // IGNORE - do nothing
     }
@@ -461,7 +489,7 @@ function insertSuggestion(comment, newText) {
   // Since we can't create actual suggestions programmatically,
   // we'll reply to the comment with the suggested text
   const replyText = `[AI Writing Coach - Suggested Edit]\n\n${newText}\n\n(Note: Please manually apply this suggestion as the API doesn't support automatic suggestion mode)`;
-  replyToComment(comment.commentId, replyText);
+  replyToComment(comment.id, replyText);
 }
 
 /**
@@ -472,16 +500,23 @@ function replyToComment(commentId, replyText) {
   const docId = doc.getId();
 
   try {
-    Drive.Replies.insert(
+    Logger.log('Attempting to reply to comment ID: ' + commentId);
+    // Drive API v3 uses Replies.create() to create a reply to an existing comment
+    const reply = Drive.Replies.create(
       {
         content: '[AI Writing Coach]\n\n' + replyText
       },
       docId,
-      commentId
+      commentId,
+      {
+        fields: 'id,content'
+      }
     );
+    Logger.log('Reply created successfully with ID: ' + reply.id);
     return true;
   } catch (error) {
     Logger.log('Error replying to comment: ' + error.toString());
+    Logger.log('Error stack: ' + error.stack);
     return false;
   }
 }
