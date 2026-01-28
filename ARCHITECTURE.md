@@ -249,7 +249,7 @@ parseClaudeAction(response)
 
 ### 3. API Layer: Claude Integration
 
-**Model Choice:** `claude-3-5-sonnet-20241022`
+**Model Choice:** `claude-sonnet-4-5-20250929`
 
 **Why Sonnet?**
 - Best balance of speed, capability, and cost
@@ -443,17 +443,38 @@ React: Show status message
 {
   "oauthScopes": [
     "https://www.googleapis.com/auth/documents.currentonly",
-    "https://www.googleapis.com/auth/script.container.ui"
+    "https://www.googleapis.com/auth/drive.readonly",
+    "https://www.googleapis.com/auth/script.container.ui",
+    "https://www.googleapis.com/auth/script.external_request"
   ]
 }
 ```
 
 **Why These?**
 - `documents.currentonly`: Access only the current document (not all user docs)
+- `drive.readonly`: Required for Drive API to read document comments
 - `script.container.ui`: Show sidebar UI
+- `script.external_request`: Make HTTP requests to Claude API
 
-**Additional Runtime Permissions:**
-- Drive API access (for comments)
+**Required Advanced Services:**
+```json
+{
+  "dependencies": {
+    "enabledAdvancedServices": [
+      {
+        "userSymbol": "Drive",
+        "version": "v3",
+        "serviceId": "drive"
+      }
+    ]
+  }
+}
+```
+
+**Why Drive API?**
+- Google Apps Script's DocumentApp does not provide a native method to retrieve comments
+- The Drive API's Comments.list() endpoint is required to fetch document comments
+- This enables the @ mention processing feature to detect "@claude" mentions in comments
 
 ## Performance Optimization
 

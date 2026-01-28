@@ -234,12 +234,12 @@ const BOT_MENTION = '@claude'; // Change to your preferred trigger
 
 Edit `Code.gs`:
 ```javascript
-const CLAUDE_MODEL = 'claude-3-5-sonnet-20241022'; // Change model here
+const CLAUDE_MODEL = 'claude-sonnet-4-5-20250929'; // Change model here
 ```
 
 Available models:
-- `claude-3-5-sonnet-20241022` (recommended, balanced)
-- `claude-3-opus-20240229` (most capable, slower/expensive)
+- `claude-sonnet-4-5-20250929` (recommended, latest Sonnet 4.5)
+- `claude-opus-4-5-20251101` (most capable, slower/expensive)
 - `claude-3-haiku-20240307` (fastest, cheaper)
 
 ### Customizing the System Prompt
